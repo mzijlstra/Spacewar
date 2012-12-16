@@ -6,6 +6,13 @@ BLACK = 0, 0, 0
 WHITE = 255,255,255
 SIZE = WIDTH, HEIGHT = 1280, 800
 
+def getDeg(dx, dy):
+	hyp = math.hypot(dx, dy)
+	deg = math.degrees(math.acos(dx / hyp))
+	if dy < 0:
+		deg = 360 - deg
+	return deg
+
 class Player:
 	
 	def __init__(self, x=640, y=400, rot=0):
@@ -16,14 +23,36 @@ class Player:
 		self.dir = 0   # direction we're going
 
 	def update(self):
-		rad = math.radians(self.rot)
+		rad = math.radians(self.dir)
 		dx = cos(rad) * self.vel
 		dy = sin(rad) * self.vel
 		self.x += dx
 		self.y += dy
+		if self.x > WIDTH:
+			self.x = 0
+		elif self.x < 0:
+			self.x = WIDTH
+
+		if self.y > HEIGHT:
+			self.y = 0
+		elif self.y < 0:
+			self.y = HEIGHT
+
 
 	def accellerate(self, val):
-		self.vel += val
+		rad = math.radians(self.dir)
+		cur_dx = cos(rad) * self.vel
+		cur_dy = sin(rad) * self.vel
+		
+		rad = math.radians(self.rot)
+		new_dx = cos(rad) * val
+		new_dy = sin(rad) * val
+
+		dx = cur_dx + new_dx
+		dy = cur_dy + new_dy
+		self.vel = math.hypot(dx, dy)
+		self.dir = getDeg(dx, dy)
+		
 		if self.vel > 5:
 			self.vel = 5
 		if self.vel < 0:
