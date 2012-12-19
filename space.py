@@ -75,7 +75,9 @@ class Player(Movable):
 			dist = math.hypot(dx, dy)
 			dist -= 2*5 #5 is the player shield radius
 			if dist <= 0:
-				other.vel, other.dir = self.vel, self.dir
+				other.vel, other.dir, self.vel, self.dir = self.vel, self.dir, other.vel, other.dir
+				self.update()
+				other.update()
 
 	def reset(self):
 		self.x = self.orig['x']
@@ -83,7 +85,7 @@ class Player(Movable):
 		self.rot = self.orig['rot']
 		self.vel = 0
 
-	def update(self, others):
+	def update(self, others=None):
 		Movable.update(self)
 		# TODO check collisions with others
 
@@ -119,7 +121,7 @@ class Player(Movable):
 			point[1] += self.y
 
 		pygame.draw.polygon(surface, self.color, points)
-		pygame.draw.polygon(surface, (self.color[0],self.color[1],self.color[2],100), points, 1)
+		#pygame.draw.polygon(surface, (self.color[0],self.color[1],self.color[2],100), points, 1)
 
 	def shoot(self):
 		rad = math.radians(self.rot)
@@ -244,7 +246,7 @@ def main():
 
 	player1 = Player((255,100,100, 250), x=WIDTH/2 - WIDTH/4, y=HEIGHT/2, rot=180)
 	player2 = Player((100,100,255, 250), x=WIDTH/2 + WIDTH/4, y=HEIGHT/2, rot=0)
-	blackhole = GravityWell(WIDTH/2, HEIGHT/2, 15, 2.5)
+	blackhole = GravityWell(WIDTH/2, HEIGHT/2, 15, 5.5)
 
 	# list of game objects
 	things = [player1, player2, blackhole]
