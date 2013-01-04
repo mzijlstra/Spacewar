@@ -5,7 +5,7 @@ from math import cos, sin
 BLACK = 0, 0, 0
 WHITE = 255,255,255
 #SIZE = WIDTH, HEIGHT = 1280, 800
-SIZE = WIDTH, HEIGHT = 800,600
+SIZE = WIDTH, HEIGHT = 1024,768
 
 def getDeg(dx, dy):
 	hyp = math.hypot(dx, dy)
@@ -67,6 +67,9 @@ class Player(Movable):
 		self.orig['x'] = x
 		self.orig['y'] = y
 		self.orig['rot'] = rot
+		self.health = 100
+		self.lives = 3
+		self.shooting = 0
 
 	def checkCollision(self, other):
 		if other != self and isinstance(other, Player):
@@ -75,11 +78,24 @@ class Player(Movable):
 			dist = math.hypot(dx, dy)
 			dist -= 2*5 #5 is the player shield radius
 			if dist <= 0:
-				other.vel, other.dir, self.vel, self.dir = self.vel, self.dir, other.vel, other.dir
+				# TODO damage based on collision speed
+				self.health -= 25
+				other.health -= 25
+				other.vel, self.vel = self.vel, other.vel
+				other.dir, self.dir = self.dir, other.dir
 				self.update()
 				other.update()
 
+		if isinstance(other, GravityWell):
+			dx = self.x - other.x
+			dy = self.y - other.y
+			hyp = math.hypot(dx, dy)
+			if hyp <= other.rad:
+				self.reset()
+
 	def reset(self):
+		self.lives -= 1
+		self.health = 100
 		self.x = self.orig['x']
 		self.y = self.orig['y']
 		self.rot = self.orig['rot']
@@ -87,7 +103,10 @@ class Player(Movable):
 
 	def update(self, others=None):
 		Movable.update(self)
-		# TODO check collisions with others
+		if self.shooting > 0:
+			self.shooting -= 1
+		if self.health <= 0:
+			self.reset()
 
 	def accellerate(self, val):
 		self.applyForce(val, self.rot)
@@ -124,12 +143,17 @@ class Player(Movable):
 		#pygame.draw.polygon(surface, (self.color[0],self.color[1],self.color[2],100), points, 1)
 
 	def shoot(self):
-		rad = math.radians(self.rot)
-		x = self.x + math.cos(rad) * 7
-		y = self.y + math.sin(rad) * 7
-		b = Bullet(x, y, self.vel, self.dir, self.color)
-		b.applyForce(3, self.rot)
-		return b
+		if self.shooting == 0:
+			rad = math.radians(self.rot)
+			x = self.x + math.cos(rad) * 7
+			y = self.y + math.sin(rad) * 7
+			b = Bullet(x, y, self.vel, self.dir, self.color)
+			b.applyForce(3, self.rot)
+			b.update()
+			self.shooting = 2
+			return b
+		else:
+			return False
 
 class GravityWell:
 	def __init__(self, x, y, rad, force):
@@ -152,14 +176,8 @@ class GravityWell:
 	def applyForce(self, vel, dir):
 		pass
 
-	def checkCollision(self, player):
-		if isinstance(player, Player):
-			dx = self.x - player.x
-			dy = self.y - player.y
-			hyp = math.hypot(dx, dy)
-			if hyp <= self.rad:
-				player.reset()
-
+	def checkCollision(self, other):
+		pass
 
 	def display(self, surface):
 		pygame.draw.circle(surface, (255,255,255,255), (self.x, self.y), self.rad, 1)
@@ -170,20 +188,35 @@ class GravityWell:
 		pygame.draw.circle(surface, (255,255,255,25), (self.x, self.y), self.rad + 5, 1)
 
 class Bullet(Movable):
+	# not super happy with these explosion colors, but they'll have to do for now
+	n1 = [(192,122,0,192),(128,128,0,192), (128,128,0,128),(0,0,0,0),(0,0,0,0)]
+	n2 = [(192,122,0,192),(192,122,0,192),(128,128,0,192), (128,128,0,128),(0,0,0,0)]
+	n3 = [(192,128,0,128),(192,122,0,192),(192,122,0,192),(128,128,0,192), (128,128,0,128)]
+	n4 = [(128,64,0,192),(192,128,0,128),(192,122,0,192),(192,192,100,192),(192,192,192,192)]
+	n5 = [(128,64,0,192),(192,128,0,50),(192,122,0,128),(192,192,192,128),(192,192,192,128)]
+	exp = [n5,n4,n3,n2,n1] # going to be using negative indexes into this
+
 	def __init__(self, x, y, vel, dir, color):
 		Movable.__init__(self, x, y, vel, dir)
 		self.color = color
-		self.ttl = 250
+		self.ttl = 255
 
 	def display(self, surface):
 		color = self.color
-		pygame.draw.circle(surface, color, (int(self.x), int(self.y)), 1)
-		pygame.draw.circle(surface, (color[0], color[1], color[2], 125), (int(self.x), int(self.y)), 2)
+		if self.ttl >= 0:
+			pygame.draw.circle(surface, color, (int(self.x), int(self.y)), 1)
+			pygame.draw.circle(surface, (color[0], color[1], color[2], 125), (int(self.x), int(self.y)), 2)
+		if self.ttl < 0:
+			pygame.draw.circle(surface, Bullet.exp[self.ttl][0], (int(self.x), int(self.y)), 1, 1)
+			pygame.draw.circle(surface, Bullet.exp[self.ttl][1], (int(self.x), int(self.y)), 2, 1)
+			pygame.draw.circle(surface, Bullet.exp[self.ttl][2], (int(self.x), int(self.y)), 3, 1)
+			pygame.draw.circle(surface, Bullet.exp[self.ttl][3], (int(self.x), int(self.y)), 4, 1)
+			#pygame.draw.circle(surface, Bullet.exp[self.ttl][4], (int(self.x), int(self.y)), 5, 1)
 
-	def update(self, others):
+	def update(self, others=None):
 		Movable.update(self)
 		self.ttl -= 1
-		if self.ttl < 0:
+		if self.ttl < -5:
 			others.remove(self)
 
 	def checkCollision(self, other):
@@ -191,15 +224,17 @@ class Bullet(Movable):
 			dx = self.x - other.x
 			dy = self.y - other.y
 			dist = math.hypot(dx, dy)
-			if dist <= other.rad:
+			if dist <= other.rad and self.ttl > 0:
 				self.ttl = 0
 		elif isinstance(other, Player):
 			dx = self.x - other.x
 			dy = self.y - other.y
 			dist = math.hypot(dx, dy)
 			if dist <= 5: # shield radius
-				other.applyForce(self.vel, self.dir)
-				self.ttl = 0
+				other.applyForce(self.vel / 5, self.dir)
+				other.health -= 25
+				if self.ttl > 0:
+					self.ttl = 0
 		
 def keyboardInput(player1, player2, mobs):
 	# quit on window close or escape key
@@ -220,7 +255,9 @@ def keyboardInput(player1, player2, mobs):
 	if keys[pygame.K_s]:
 		player1.accellerate(-0.1)
 	if keys[pygame.K_LSHIFT]:
-		mobs.append(player1.shoot())
+		b = player1.shoot()
+		if b != False:
+			mobs.append(b)
 
 	# player 2
 	if keys[pygame.K_RIGHT]:
@@ -232,21 +269,35 @@ def keyboardInput(player1, player2, mobs):
 	if keys[pygame.K_DOWN]:
 		player2.accellerate(-0.1)
 	if keys[pygame.K_RSHIFT]:
-		mobs.append(player2.shoot())
+		b = player2.shoot()
+		if b != False:
+			mobs.append(b)
 	
 
 def main():
 	# basic init
 	os.environ['SDL_VIDEO_CENTERED'] = '1'
 	pygame.init()
+	pygame.font.init()
+	font = pygame.font.SysFont('monospace', 10)
 
 	screen = pygame.display.set_mode(SIZE)
 	buff = pygame.Surface(SIZE, flags=pygame.SRCALPHA, depth=32)
 	clock = pygame.time.Clock()
 
-	player1 = Player((255,100,100, 250), x=WIDTH/2 - WIDTH/4, y=HEIGHT/2, rot=180)
-	player2 = Player((100,100,255, 250), x=WIDTH/2 + WIDTH/4, y=HEIGHT/2, rot=0)
+	# player colors
+	c1 = (255,100,100, 250)
+	c2 = (100,100,255, 250)
+
+	player1 = Player(c1, x=WIDTH/2 - WIDTH/4, y=HEIGHT/2, rot=180)
+	player2 = Player(c2, x=WIDTH/2 + WIDTH/4, y=HEIGHT/2, rot=0)
 	blackhole = GravityWell(WIDTH/2, HEIGHT/2, 15, 5.5)
+
+	# ships to draw remaining 'lives'
+	c1 = c1[0], c1[1], c1[2], 128
+	c2 = c2[0], c2[1], c2[2], 128
+	l1 = Player(c1, 140, 25, 270)
+	l2 = Player(c2, WIDTH-140, 25, 270)
 
 	# list of game objects
 	things = [player1, player2, blackhole]
@@ -257,10 +308,10 @@ def main():
 
 		# do game state updates
 		for thing in things:
-			thing.update(things)
 			thing.checkCollision(player1)
 			thing.checkCollision(player2)
 			thing.checkCollision(blackhole)
+			thing.update(things)
 
 		#draw screen
 		screen.fill(BLACK)
@@ -269,10 +320,39 @@ def main():
 		for thing in things:
 			thing.display(buff)
 
+		# draw health bars
+		c1 = player1.color
+		r1 = pygame.Rect(20, 20, 100, 10)
+		h1 = pygame.Rect(20, 20, player1.health, 10)
+		pygame.draw.rect(buff, (c1[0], c1[1], c1[2], 128), h1)
+		pygame.draw.rect(buff, (c1[0], c1[1], c1[2], 128), r1, 1)
+
+		c2 = player2.color
+		r2 = pygame.Rect(WIDTH - 120, 20, 100, 10)
+		h2 = pygame.Rect(WIDTH - 120, 20, player2.health, 10)
+		pygame.draw.rect(buff, (c2[0], c2[1], c2[2], 128), h2)
+		pygame.draw.rect(buff, (c2[0], c2[1], c2[2], 128), r2, 1)
+
+		# draw lives
+		l1.x = 140
+		for i in range(player1.lives):
+			l1.display(buff)
+			l1.x += 10
+
+		l2.x = WIDTH-140
+		for i in range(player2.lives):
+			l2.display(buff)
+			l2.x -= 10
+
+		#s1 = font.render(str(player1.score), True, player1.color)
+		#s2 = font.render(str(player2.score), True, player2.color)
+		#buff.blit(s1, (140, 20))
+		#buff.blit(s2, (WIDTH - 140, 20))
+
 		screen.blit(buff, (0,0))
 		pygame.display.flip()
 
-		#do loop at 40 fps
-		clock.tick(40)
+		#do loop at 60 fps
+		clock.tick(60)
 
 if __name__ == '__main__': main()
