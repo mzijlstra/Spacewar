@@ -6,6 +6,12 @@ BLACK = 0, 0, 0
 WHITE = 255,255,255
 #SIZE = WIDTH, HEIGHT = 1280, 800
 SIZE = WIDTH, HEIGHT = 1024,768
+FONTSIZE = 25
+menuSelection = 0
+# FIXME the following variables should not be global!!!
+state = None
+things = []
+
 
 def getDeg(dx, dy):
 	hyp = math.hypot(dx, dy)
@@ -236,64 +242,37 @@ class Bullet(Movable):
 				if self.ttl > 0:
 					self.ttl = 0
 		
-def keyboardInput(player1, player2, mobs):
-	# quit on window close or escape key
-	for event in pygame.event.get():
-		if event.type == pygame.QUIT \
-		   or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
-			pygame.quit()
-			sys.exit()
-
-	# player 1
-	keys = pygame.key.get_pressed()
-	if keys[pygame.K_d]:
-		player1.rotate(+5)
-	if keys[pygame.K_a]:
-		player1.rotate(-5)
-	if keys[pygame.K_w]:
-		player1.accellerate(+0.25)
-	if keys[pygame.K_s]:
-		player1.accellerate(-0.1)
-	if keys[pygame.K_LSHIFT]:
-		b = player1.shoot()
-		if b != False:
-			mobs.append(b)
-
-	# player 2
-	if keys[pygame.K_RIGHT]:
-		player2.rotate(+5)
-	if keys[pygame.K_LEFT]:
-		player2.rotate(-5)
-	if keys[pygame.K_UP]:
-		player2.accellerate(+0.25)
-	if keys[pygame.K_DOWN]:
-		player2.accellerate(-0.1)
-	if keys[pygame.K_RSHIFT]:
-		b = player2.shoot()
-		if b != False:
-			mobs.append(b)
-	
+def quit():
+	pygame.quit()
+	sys.exit()
 
 def main():
+	global state
+	global things
+
 	# basic init
 	os.environ['SDL_VIDEO_CENTERED'] = '1'
 	pygame.init()
-	pygame.font.init()
-	font = pygame.font.SysFont('monospace', 10)
 
+	# initialize  fonts and stuff for menus
+	pygame.font.init()
+	font = pygame.font.SysFont('monospace', FONTSIZE)
+	textColor = (255,255,255)
+	selected  = (255,255,0)
+
+	# setup the screen, double buffer and game clock
 	screen = pygame.display.set_mode(SIZE)
 	buff = pygame.Surface(SIZE, flags=pygame.SRCALPHA, depth=32)
 	clock = pygame.time.Clock()
 
-	# player colors
+	# Game objects (players and black hole)
 	c1 = (255,100,100, 250)
 	c2 = (100,100,255, 250)
-
 	player1 = Player(c1, x=WIDTH/2 - WIDTH/4, y=HEIGHT/2, rot=180)
 	player2 = Player(c2, x=WIDTH/2 + WIDTH/4, y=HEIGHT/2, rot=0)
 	blackhole = GravityWell(WIDTH/2, HEIGHT/2, 15, 5.5)
 
-	# ships to draw remaining 'lives'
+	# Interface needs Player objects to draw remaining 'lives'
 	c1 = c1[0], c1[1], c1[2], 128
 	c2 = c2[0], c2[1], c2[2], 128
 	l1 = Player(c1, 140, 25, 270)
@@ -302,9 +281,46 @@ def main():
 	# list of game objects
 	things = [player1, player2, blackhole]
 
-	# game loop
-	while True:
-		keyboardInput(player1, player2, things)
+	def gameLoop():
+		global state
+		global things
+
+		# quit on window close 
+		for event in pygame.event.get():
+			if event.type == pygame.QUIT:
+				quit()
+
+		# player 1 input
+		keys = pygame.key.get_pressed()
+		if keys[pygame.K_ESCAPE]:
+			state = mainMenuLoop
+
+		if keys[pygame.K_d]:
+			player1.rotate(+5)
+		if keys[pygame.K_a]:
+			player1.rotate(-5)
+		if keys[pygame.K_w]:
+			player1.accellerate(+0.25)
+		if keys[pygame.K_s]:
+			player1.accellerate(-0.1)
+		if keys[pygame.K_LSHIFT]:
+			b = player1.shoot()
+			if b != False:
+				things.append(b)
+
+		# player 2 input
+		if keys[pygame.K_RIGHT]:
+			player2.rotate(+5)
+		if keys[pygame.K_LEFT]:
+			player2.rotate(-5)
+		if keys[pygame.K_UP]:
+			player2.accellerate(+0.25)
+		if keys[pygame.K_DOWN]:
+			player2.accellerate(-0.1)
+		if keys[pygame.K_RSHIFT]:
+			b = player2.shoot()
+			if b != False:
+				things.append(b)
 
 		# do game state updates
 		for thing in things:
@@ -313,10 +329,10 @@ def main():
 			thing.checkCollision(blackhole)
 			thing.update(things)
 
-		#draw screen
-		screen.fill(BLACK)
+		# initialize buffer
 		buff.fill(BLACK)
 
+		# draw the things
 		for thing in things:
 			thing.display(buff)
 
@@ -344,12 +360,56 @@ def main():
 			l2.display(buff)
 			l2.x -= 10
 
-		#s1 = font.render(str(player1.score), True, player1.color)
-		#s2 = font.render(str(player2.score), True, player2.color)
-		#buff.blit(s1, (140, 20))
-		#buff.blit(s2, (WIDTH - 140, 20))
-
+		# draw buffer onto the screen (alpha blending)
 		screen.blit(buff, (0,0))
+		
+	def mainMenuLoop():
+		global menuSelection
+		options = [ 
+			'Game', \
+			'Quit']
+		def startAction():
+			global state
+			state = gameLoop
+		def quitAction():
+			quit()
+
+		actions = [startAction, quitAction]
+
+		# event driven menu navigation
+		for event in pygame.event.get():
+			if event.type == pygame.QUIT:
+				quit()
+			if event.type == pygame.KEYDOWN and event.key in \
+					(pygame.K_UP, pygame.K_a):
+				menuSelection = (menuSelection + 1) % len(options)
+			if event.type == pygame.KEYDOWN and event.key in \
+					(pygame.K_DOWN, pygame.K_s):
+				menuSelection = (menuSelection - 1) % len(options)
+			if event.type == pygame.KEYDOWN and event.key in \
+					(pygame.K_SPACE, pygame.K_RETURN):
+				actions[menuSelection]()
+		
+		# render menu items	
+		for i in range(len(options)):
+			color = textColor
+			if i == menuSelection:
+				color = selected
+
+			text = font.render(options[i], 1, color)
+			screen.blit(text, (WIDTH*0.25, HEIGHT*0.25 + FONTSIZE*2*i)) #TODO test me!
+
+	state = mainMenuLoop
+		
+	# game loop
+	while True:
+		# initialize screen
+		screen.fill(BLACK)
+
+		# do the loop for the current state
+		state()
+
+		# show stuff on screen
 		pygame.display.flip()
 
 		#do loop at 60 fps
