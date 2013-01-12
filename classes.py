@@ -87,6 +87,14 @@ class Player(Movable):
 		self.accelerating = 0
 		self.shooting = 0
 		self.jumpdisabled = 0
+		self.shieldUp = 0
+
+		# Energy management
+		self.ammo = 0
+		self.jump = 0
+		self.ammoRate = 0
+		self.shieldRate = 0
+		self.jumpRate = 0
 
 		# each new live needs to start atoriginal x/y/rot
 		self.orig = {}
@@ -95,17 +103,15 @@ class Player(Movable):
 		self.orig['rot'] = rot
 
 		# UI elements for this player
+		font = pygame.font.SysFont('monospace', 12)
+		self.uicolor = self.color[0], self.color[1], self.color[2], 128
 		self.healthLoc = healthLoc
 		self.livesLoc = livesLoc
-
-		# TODO add energy management
-		self.healthRate = 0
-		self.shieldUp = 0
-		self.shieldRate = 0
-		self.ammo = 0
-		self.ammoRate = 0
-		self.hyper = 0
-		self.hyperRate = 0
+		self.uitext = []
+		self.uitext.append(font.render('H', 1, self.uicolor))
+		self.uitext.append(font.render('A', 1, self.uicolor))
+		self.uitext.append(font.render('S', 1, self.uicolor))
+		self.uitext.append(font.render('J', 1, self.uicolor))
 
 
 	def checkCollision(self, other):
@@ -204,7 +210,7 @@ class Player(Movable):
 			b = Bullet(x, y, self.vel, self.dir, self.color)
 			b.applyForce(3, self.rot)
 			b.update()
-			self.shooting = 2
+			self.shooting = 3
 			return b
 		else:
 			return False
@@ -226,9 +232,9 @@ class Player(Movable):
 
 		points = []
 		# first define the points relative to our x and y
-		points.append([5, 0])
+		points.append([7, 0])
 		points.append([-5, 5])
-		points.append([-4, 0])
+		points.append([-1, 0])
 		points.append([-5, -5])
 
 		# do rotation, and move to screen position
@@ -240,10 +246,10 @@ class Player(Movable):
 		# draw flame for acceleration
 		if accel > 0:
 			points = []
-			points.append([-5,0])
-			points.append([-6,1])
-			points.append([-7,0])
-			points.append([-6,-1])
+			points.append([-2,0])
+			points.append([-4,-1])
+			points.append([-6,0])
+			points.append([-4,1])
 			rotateAndMove(points, rot, (x,y))
 			pygame.draw.polygon(surface, (225,225,0), points)
 
@@ -257,17 +263,16 @@ class Player(Movable):
 			pygame.draw.circle(surface, (255,255,255), (int(self.x), int(self.y)), 12, 1)
 
 		# draw health bar for this player
-		uicolor = self.color[0], self.color[1], self.color[2], 128
 		healthx = self.healthLoc[0]
 		healthy = self.healthLoc[1]
 
 		# first draw containing rectangle
 		rect = pygame.Rect(healthx, healthy, 100, 10) 
-		pygame.draw.rect(surface, uicolor, rect, 1)
+		pygame.draw.rect(surface, self.uicolor, rect, 1)
 
 		# then the actual health bar
 		health = pygame.Rect(healthx, healthy, self.health, 10) 
-		pygame.draw.rect(surface, uicolor, health)
+		pygame.draw.rect(surface, self.uicolor, health)
 
 		# draw extra lives for this player
 		livesx = self.livesLoc[0]
@@ -280,8 +285,19 @@ class Player(Movable):
 		for i in range(self.lives):
 			# TODO check that this doesn't take too much computing
 			# could make the default rotation up, might save some cycles
-			Player.renderShip(surface, (livesx, livesy), 270, uicolor)
+			Player.renderShip(surface, (livesx, livesy), 270, self.uicolor)
 			livesx += livesdx
+
+		# draw 'H' letter beside health bar
+		textx = self.healthLoc[0] - 10
+		if livesx < healthx:
+			textx = self.healthLoc[0] + 105
+		texty = self.healthLoc[1] - 1
+		surface.blit(self.uitext[0], (textx, texty))
+
+		# TODO ammo bar
+		# TODO shield bar
+		# TODO Jump bar
 
 
 class GravityWell:
@@ -376,15 +392,4 @@ class Bullet(Movable):
 			dist = math.hypot(dx, dy)
 			if dist <= other.rad and self.ttl > 0:
 				self.ttl = 0
-		
-		# started doing bullet on bullet collisions as well
-		# but it took way too much CPU 
-
-		#if isinstance(other, Bullet):
-		#	# only collide with other player's bullets
-		#	if self.x == other.x and self.y == other.y and self.color != other.color:
-		#		if self.ttl > 0:
-		#			self.ttl = 0
-		#		if other.ttl > 0:
-		#			other.ttl = 0
 		
