@@ -12,6 +12,7 @@ class Menu:
 			raise ValueError('Options and Actions do not match')
 
 		self.font = pygame.font.SysFont('monospace', Menu.fontsize)
+		self.font.set_bold(True)
 		self.options = options
 		self.actions = actions
 		self.selected = 0
@@ -54,6 +55,7 @@ class Game:
 
 		self.winner = False
 		self.font = pygame.font.SysFont('monospace', Menu.fontsize)
+		self.font.set_bold(True)
 		self.textcolor = (255,255,255)
 		
 	def loop(self, screen):
@@ -87,6 +89,10 @@ class Game:
 				b = self.player1.shoot()
 				if b != False:
 					self.things.append(b)
+			if keys[pygame.K_z]:
+				self.player1.hyperjump()
+			if keys[pygame.K_LCTRL]:
+				self.player1.shield()
 
 			# player 2 input
 			if keys[pygame.K_RIGHT]:
@@ -101,14 +107,18 @@ class Game:
 				b = self.player2.shoot()
 				if b != False:
 					self.things.append(b)
+			if keys[pygame.K_SLASH]:
+				self.player2.hyperjump()
+			if keys[pygame.K_PERIOD]:
+				self.player2.shield()
 
-			# do game state updates
+			# do updates and check collisions
 			for thing in self.things:
 				thing.checkCollision(self.player1)
 				thing.checkCollision(self.player2)
 				thing.checkCollision(self.blackhole)
 				thing.update(self.things)
-
+			
 			# check win condition
 			if self.player1.lives < 0 and self.player2.lives < 0:
 				self.winner = "It's a Tie!"

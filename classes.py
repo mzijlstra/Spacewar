@@ -1,4 +1,4 @@
-import pygame, math
+import pygame, math, random
 from math import cos, sin
 import spacewar
 from spacewar import SIZE, WIDTH, HEIGHT
@@ -12,6 +12,20 @@ def getDeg(dx, dy):
 	if dy < 0:
 		deg = 360 - deg
 	return deg
+
+def rotateAndMove(points, rot, (x,y)):
+	'Helper function to rotate list of points'
+	# then rotate according to our rot
+	rad = math.radians(rot)
+	for point in points:
+		curx = point[0]
+		cury = point[1]
+		point[0] = curx*cos(rad) - cury*sin(rad)
+		point[1] = curx*sin(rad) + cury*cos(rad)
+
+	for point in points:
+		point[0] += x
+		point[1] += y
 
 class Movable:
 	'Super class for movable game objects'
@@ -68,7 +82,11 @@ class Player(Movable):
 		# player attributes
 		self.health = 100
 		self.lives = 3
+
+		# state related attributes
+		self.accelerating = 0
 		self.shooting = 0
+		self.jumpdisabled = 0
 
 		# each new live needs to start atoriginal x/y/rot
 		self.orig = {}
@@ -80,20 +98,64 @@ class Player(Movable):
 		self.healthLoc = healthLoc
 		self.livesLoc = livesLoc
 
+		# TODO add energy management
+		self.healthRate = 0
+		self.shieldUp = 0
+		self.shieldRate = 0
+		self.ammo = 0
+		self.ammoRate = 0
+		self.hyper = 0
+		self.hyperRate = 0
+
+
 	def checkCollision(self, other):
 		if other != self and isinstance(other, Player):
 			dx = self.x - other.x
 			dy = self.y - other.y
 			dist = math.hypot(dx, dy)
-			dist -= 2*5 #5 is the player shield radius
+			dist -= 2*5 #5 is the player damage
+
+			# shields up also makes collision sooner
+			if self.shieldUp > 0:
+				dist -= 5
+			if other.shieldUp > 0:
+				dist -= 5
+
 			if dist <= 0:
-				# TODO damage based on collision speed
-				self.health -= 25
-				other.health -= 25
-				other.vel, self.vel = self.vel, other.vel
-				other.dir, self.dir = self.dir, other.dir
-				self.update()
-				other.update()
+				# the length of the collision vector 
+				# is with how much force they hit
+				dxa = cos(math.radians(self.dir)) * self.vel
+				dya = sin(math.radians(self.dir)) * self.vel
+				dxb = cos(math.radians(other.dir)) * other.vel
+				dyb = sin(math.radians(other.dir)) * other.vel
+				dx = dxa - dxb
+				dy = dya - dyb
+				length = math.hypot(dx, dy)
+
+				# do damage based on the force mutiplied by 5
+				# seems about right when no shield, maybe a bit low
+				# when shields are up just bounce, no shield half bounce
+				if self.shieldUp > 0 and other.shieldUp > 0:
+					# bounce away from each other
+					other.vel, self.vel = self.vel, other.vel
+					other.dir, self.dir = self.dir, other.dir
+				elif self.shieldUp	> 0 and other.shieldUp == 0:
+					other.vel, self.vel = self.vel*0.5, other.vel
+					other.dir, self.dir = self.dir, other.dir
+					other.health -= length * 5
+				elif self.shieldUp == 0 and other.shieldUp > 0:
+					other.vel, self.vel = self.vel, other.vel*0.5
+					other.dir, self.dir = self.dir, other.dir
+					self.health -= length * 5 
+				else: # self.shieldUp == 0 and other.shieldUp == 0
+					other.vel, self.vel = self.vel*0.5, other.vel*0.5
+					other.dir, self.dir = self.dir, other.dir
+					self.health -= length * 5 
+					other.health -= length * 5
+
+				# make sure they're moved appart
+				Movable.update(self)
+				Movable.update(other)
 
 		if isinstance(other, GravityWell):
 			dx = self.x - other.x
@@ -114,11 +176,18 @@ class Player(Movable):
 		Movable.update(self)
 		if self.shooting > 0:
 			self.shooting -= 1
+		if self.accelerating > 0:
+			self.accelerating -= 1
+		if self.jumpdisabled > 0:
+			self.jumpdisabled -= 1
+		if self.shieldUp > 0:
+			self.shieldUp -= 1
 		if self.health <= 0:
 			self.reset()
 
 	def accellerate(self, val):
 		self.applyForce(val, self.rot)
+		self.accelerating = 2
 
 	def rotate(self, val):
 		self.rot = self.rot + val
@@ -127,38 +196,65 @@ class Player(Movable):
 		elif self.rot < -360:
 			self.rot += 360
 
+	def shoot(self):
+		if self.shooting == 0:
+			rad = math.radians(self.rot)
+			x = self.x + math.cos(rad) * 7
+			y = self.y + math.sin(rad) * 7
+			b = Bullet(x, y, self.vel, self.dir, self.color)
+			b.applyForce(3, self.rot)
+			b.update()
+			self.shooting = 2
+			return b
+		else:
+			return False
+
+	def hyperjump(self):
+		# Question: should we maintain velocity after jumping?
+		# Answer: not sure, we'll say yes for now
+		if self.jumpdisabled == 0:
+			self.x = random.randrange(0, WIDTH)
+			self.y = random.randrange(0, HEIGHT)
+			self.jumpdisabled = 180
+
+	def shield(self):
+		self.shieldUp = 2
+
 	@staticmethod
-	def renderShip(surface, (x,y), rot, color):
+	def renderShip(surface, (x,y), rot, color, accel=False):
 		'static helper method to draw a ship at a specific location'
 
 		points = []
 		# first define the points relative to our x and y
 		points.append([5, 0])
 		points.append([-5, 5])
-		points.append([-2, 0])
+		points.append([-4, 0])
 		points.append([-5, -5])
 
-		# then rotate according to our rot
-		rad = math.radians(rot)
-		for point in points:
-			curx = point[0]
-			cury = point[1]
-			point[0] = curx*cos(rad) - cury*sin(rad)
-			point[1] = curx*sin(rad) + cury*cos(rad)
-
-		# then update the points to become absolute screen positions
-		for point in points:
-			point[0] += x
-			point[1] += y
+		# do rotation, and move to screen position
+		rotateAndMove(points, rot, (x,y)) 
 
 		# draw player at current location
 		pygame.draw.polygon(surface, color, points)
 
+		# draw flame for acceleration
+		if accel > 0:
+			points = []
+			points.append([-5,0])
+			points.append([-6,1])
+			points.append([-7,0])
+			points.append([-6,-1])
+			rotateAndMove(points, rot, (x,y))
+			pygame.draw.polygon(surface, (225,225,0), points)
 
 	def display(self, surface):
 		# draw player ship at current location
 		if self.lives >= 0:
-			Player.renderShip(surface, (self.x,self.y), self.rot, self.color)
+			Player.renderShip(surface, (self.x,self.y), self.rot, self.color, self.accelerating)
+
+		# draw shield around player if shield is on
+		if self.shieldUp > 0:
+			pygame.draw.circle(surface, (255,255,255), (int(self.x), int(self.y)), 12, 1)
 
 		# draw health bar for this player
 		uicolor = self.color[0], self.color[1], self.color[2], 128
@@ -179,24 +275,14 @@ class Player(Movable):
 		livesdx = 10
 		if livesx < healthx:
 			livesdx = -10
-		
+
 		# draw one ship for each extra live
 		for i in range(self.lives):
+			# TODO check that this doesn't take too much computing
+			# could make the default rotation up, might save some cycles
 			Player.renderShip(surface, (livesx, livesy), 270, uicolor)
 			livesx += livesdx
 
-	def shoot(self):
-		if self.shooting == 0:
-			rad = math.radians(self.rot)
-			x = self.x + math.cos(rad) * 7
-			y = self.y + math.sin(rad) * 7
-			b = Bullet(x, y, self.vel, self.dir, self.color)
-			b.applyForce(3, self.rot)
-			b.update()
-			self.shooting = 2
-			return b
-		else:
-			return False
 
 class GravityWell:
 	def __init__(self, x, y, rad, force):
@@ -246,10 +332,10 @@ class Bullet(Movable):
 
 	def display(self, surface):
 		color = self.color
-		if self.ttl >= 0:
+		if self.ttl > 0:
 			pygame.draw.circle(surface, color, (int(self.x), int(self.y)), 1)
 			pygame.draw.circle(surface, (color[0], color[1], color[2], 125), (int(self.x), int(self.y)), 2)
-		if self.ttl < 0:
+		elif self.ttl <= 0:
 			pygame.draw.circle(surface, Bullet.exp[self.ttl][0], (int(self.x), int(self.y)), 1, 1)
 			pygame.draw.circle(surface, Bullet.exp[self.ttl][1], (int(self.x), int(self.y)), 2, 1)
 			pygame.draw.circle(surface, Bullet.exp[self.ttl][2], (int(self.x), int(self.y)), 3, 1)
@@ -263,19 +349,42 @@ class Bullet(Movable):
 			others.remove(self)
 
 	def checkCollision(self, other):
+		if isinstance(other, Player):
+			dx = self.x - other.x
+			dy = self.y - other.y
+			dist = math.hypot(dx, dy)
+
+			if other.shieldUp > 0:
+				# 12 radius of shield?
+				# this also means that own bullets (being shot)
+				# can not go from inside to outside shield
+				if dist <= 12:
+					other.applyForce(self.vel / 5, self.dir)
+					if self.ttl > 0:
+						self.ttl = 0
+			else: # noshield
+				# 5 radius is ship damage?
+				if dist <= 5: 
+					other.applyForce(self.vel / 10, self.dir)
+					other.health -= 25
+					if self.ttl > 0:
+						self.ttl = 0
+
 		if isinstance(other, GravityWell):
 			dx = self.x - other.x
 			dy = self.y - other.y
 			dist = math.hypot(dx, dy)
 			if dist <= other.rad and self.ttl > 0:
 				self.ttl = 0
-		elif isinstance(other, Player):
-			dx = self.x - other.x
-			dy = self.y - other.y
-			dist = math.hypot(dx, dy)
-			if dist <= 5: # shield radius
-				other.applyForce(self.vel / 5, self.dir)
-				other.health -= 25
-				if self.ttl > 0:
-					self.ttl = 0
+		
+		# started doing bullet on bullet collisions as well
+		# but it took way too much CPU 
+
+		#if isinstance(other, Bullet):
+		#	# only collide with other player's bullets
+		#	if self.x == other.x and self.y == other.y and self.color != other.color:
+		#		if self.ttl > 0:
+		#			self.ttl = 0
+		#		if other.ttl > 0:
+		#			other.ttl = 0
 		
