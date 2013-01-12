@@ -74,33 +74,43 @@ class Movable:
 class Player(Movable):
 	'Player class that extends Movable'
 
+	# default usage amounts (out of 100)
+	use = {}
+	use['ammo'] = 3
+	use['shield'] = 2
+	use['engine'] = 5
+	use['jump'] = 75
+
+	# default recharge rates (per frame)
+	rate = {}
+	rate['repair'] = 0.05
+	rate['ammo']   = 0.2
+	rate['shield'] = 0.25
+	rate['engine'] = 1
+	rate['jump']   = 0.25
+
 	def __init__(self, color, x, y, rot, healthLoc, livesLoc):
 		Movable.__init__(self, x, y, 0, 0)
 		self.color = color
 		self.rot = rot # angle we're facing
 
 		# player attributes
-		self.health = 100
-		self.lives = 3
-
-		# state related attributes
-		self.accelerating = 0
-		self.shooting = 0
-		self.jumpdisabled = 0
-		self.shieldUp = 0
-
-		# Energy management
-		self.ammo = 0
-		self.jump = 0
-		self.ammoRate = 0
-		self.shieldRate = 0
-		self.jumpRate = 0
+		self.lives = 4
 
 		# each new live needs to start atoriginal x/y/rot
 		self.orig = {}
 		self.orig['x'] = x
 		self.orig['y'] = y
 		self.orig['rot'] = rot
+
+		# reset removes a live, sets:
+		# health, ammo, shield, engine, jump
+		Player.reset(self)
+
+		# state related attributes
+		self.accelerating = 0
+		self.shooting = 0
+		self.shieldUp = 0
 
 		# UI elements for this player
 		font = pygame.font.SysFont('monospace', 12)
@@ -111,7 +121,53 @@ class Player(Movable):
 		self.uitext.append(font.render('H', 1, self.uicolor))
 		self.uitext.append(font.render('A', 1, self.uicolor))
 		self.uitext.append(font.render('S', 1, self.uicolor))
+		self.uitext.append(font.render('E', 1, self.uicolor))
 		self.uitext.append(font.render('J', 1, self.uicolor))
+
+	def reset(self):
+		self.lives -= 1
+		self.health = 100
+		self.x = self.orig['x']
+		self.y = self.orig['y']
+		self.rot = self.orig['rot']
+		self.vel = 0
+
+		self.health = 100
+		self.ammo = 100
+		self.shieldp = 100
+		self.enginep = 100
+		self.jump = 100
+
+		self.repairRate = Player.rate['repair']
+		self.ammoRate   = Player.rate['ammo']
+		self.shieldRate = Player.rate['shield']
+		self.engineRate = Player.rate['engine']
+		self.jumpRate   = Player.rate['jump']
+
+	def update(self, others=None):
+		Movable.update(self)
+
+		# state related checks
+		if self.shooting > 0:
+			self.shooting -= 1
+		if self.accelerating > 0:
+			self.accelerating -= 1
+		if self.shieldUp > 0:
+			self.shieldUp -= 1
+		if self.health <= 0:
+			self.reset()
+
+		# energy management
+		if self.health < 100:
+			self.health += self.repairRate
+		if self.ammo < 100:
+			self.ammo += self.ammoRate
+		if self.shieldp < 100:
+			self.shieldp += self.shieldRate
+		if self.enginep < 100:
+			self.enginep += self.engineRate
+		if self.jump < 100:
+			self.jump += self.jumpRate
 
 
 	def checkCollision(self, other):
@@ -170,31 +226,6 @@ class Player(Movable):
 			if hyp <= other.rad:
 				self.reset()
 
-	def reset(self):
-		self.lives -= 1
-		self.health = 100
-		self.x = self.orig['x']
-		self.y = self.orig['y']
-		self.rot = self.orig['rot']
-		self.vel = 0
-
-	def update(self, others=None):
-		Movable.update(self)
-		if self.shooting > 0:
-			self.shooting -= 1
-		if self.accelerating > 0:
-			self.accelerating -= 1
-		if self.jumpdisabled > 0:
-			self.jumpdisabled -= 1
-		if self.shieldUp > 0:
-			self.shieldUp -= 1
-		if self.health <= 0:
-			self.reset()
-
-	def accellerate(self, val):
-		self.applyForce(val, self.rot)
-		self.accelerating = 2
-
 	def rotate(self, val):
 		self.rot = self.rot + val
 		if self.rot > 360:
@@ -202,29 +233,40 @@ class Player(Movable):
 		elif self.rot < -360:
 			self.rot += 360
 
+	def accellerate(self, val):
+		if self.enginep > 5:
+			self.applyForce(val, self.rot)
+			self.accelerating = 2
+			self.enginep -= Player.use['engine']
+
 	def shoot(self):
-		if self.shooting == 0:
+		if self.shooting == 0 and self.ammo >= 2:
 			rad = math.radians(self.rot)
 			x = self.x + math.cos(rad) * 7
 			y = self.y + math.sin(rad) * 7
+			
 			b = Bullet(x, y, self.vel, self.dir, self.color)
 			b.applyForce(3, self.rot)
 			b.update()
+
 			self.shooting = 3
+			self.ammo -= Player.use['ammo']
 			return b
 		else:
 			return False
 
+	def shield(self):
+		if self.shieldp >= 2:
+			self.shieldUp = 2 # will be reduced by 1 before display
+			self.shieldp -= Player.use['shield']
+
 	def hyperjump(self):
 		# Question: should we maintain velocity after jumping?
 		# Answer: not sure, we'll say yes for now
-		if self.jumpdisabled == 0:
+		if self.jump >= 75: 
 			self.x = random.randrange(0, WIDTH)
 			self.y = random.randrange(0, HEIGHT)
-			self.jumpdisabled = 180
-
-	def shield(self):
-		self.shieldUp = 2
+			self.jump -= Player.use['jump']
 
 	@staticmethod
 	def renderShip(surface, (x,y), rot, color, accel=False):
@@ -263,22 +305,27 @@ class Player(Movable):
 			pygame.draw.circle(surface, (255,255,255), (int(self.x), int(self.y)), 12, 1)
 
 		# draw health bar for this player
-		healthx = self.healthLoc[0]
-		healthy = self.healthLoc[1]
+		barx = self.healthLoc[0]
+		bary = self.healthLoc[1]
 
 		# first draw containing rectangle
-		rect = pygame.Rect(healthx, healthy, 100, 10) 
+		rect = pygame.Rect(barx, bary, 100, 10) 
 		pygame.draw.rect(surface, self.uicolor, rect, 1)
 
 		# then the actual health bar
-		health = pygame.Rect(healthx, healthy, self.health, 10) 
-		pygame.draw.rect(surface, self.uicolor, health)
+		level = pygame.Rect(barx, bary, self.health, 10) 
+		pygame.draw.rect(surface, self.uicolor, level)
+
+		# draw repair rate line
+		rateColor = (0,255,0,128)
+		rate = 50 / Player.rate['repair'] * self.repairRate 
+		pygame.draw.line(surface, rateColor, (barx, bary + 12), (barx + rate, bary + 12))
 
 		# draw extra lives for this player
 		livesx = self.livesLoc[0]
 		livesy = self.livesLoc[1]
 		livesdx = 10
-		if livesx < healthx:
+		if livesx < barx:
 			livesdx = -10
 
 		# draw one ship for each extra live
@@ -290,14 +337,57 @@ class Player(Movable):
 
 		# draw 'H' letter beside health bar
 		textx = self.healthLoc[0] - 10
-		if livesx < healthx:
+		if livesx < barx:
 			textx = self.healthLoc[0] + 105
 		texty = self.healthLoc[1] - 1
 		surface.blit(self.uitext[0], (textx, texty))
 
-		# TODO ammo bar
-		# TODO shield bar
-		# TODO Jump bar
+		# ammo bar
+		rect.y += 15
+		pygame.draw.rect(surface, self.uicolor, rect, 1)
+
+		bary += 15
+		level = pygame.Rect(barx, bary, self.ammo, 10) 
+		pygame.draw.rect(surface, self.uicolor, level)
+
+		texty += 15
+		surface.blit(self.uitext[1], (textx, texty))
+
+		rate = 50 / Player.rate['ammo'] * self.ammoRate
+		pygame.draw.line(surface, rateColor, (barx, bary + 12), (barx + rate, bary + 12))
+
+		# shield bar
+		rect.y += 15
+		pygame.draw.rect(surface, self.uicolor, rect, 1)
+		bary += 15
+		level = pygame.Rect(barx, bary, self.shieldp, 10) 
+		pygame.draw.rect(surface, self.uicolor, level)
+		texty += 15
+		surface.blit(self.uitext[2], (textx, texty))
+		rate = 50 / Player.rate['shield'] * self.shieldRate
+		pygame.draw.line(surface, rateColor, (barx, bary + 12), (barx + rate, bary + 12))
+
+		# engine bar
+		rect.y += 15
+		pygame.draw.rect(surface, self.uicolor, rect, 1)
+		bary += 15
+		level = pygame.Rect(barx, bary, self.enginep, 10) 
+		pygame.draw.rect(surface, self.uicolor, level)
+		texty += 15
+		surface.blit(self.uitext[3], (textx, texty))
+		rate = 50 / Player.rate['engine'] * self.engineRate
+		pygame.draw.line(surface, rateColor, (barx, bary + 12), (barx + rate, bary + 12))
+
+		# Jump bar
+		rect.y += 15
+		pygame.draw.rect(surface, self.uicolor, rect, 1)
+		bary += 15
+		level = pygame.Rect(barx, bary, self.jump, 10) 
+		pygame.draw.rect(surface, self.uicolor, level)
+		texty += 15
+		surface.blit(self.uitext[4], (textx, texty))
+		rate = 50 / Player.rate['jump'] * self.jumpRate
+		pygame.draw.line(surface, rateColor, (barx, bary + 12), (barx + rate, bary + 12))
 
 
 class GravityWell:
@@ -365,31 +455,32 @@ class Bullet(Movable):
 			others.remove(self)
 
 	def checkCollision(self, other):
-		if isinstance(other, Player):
-			dx = self.x - other.x
-			dy = self.y - other.y
-			dist = math.hypot(dx, dy)
+		if self.ttl > 0: # only bullets that are not exploding
+			if isinstance(other, Player):
+				dx = self.x - other.x
+				dy = self.y - other.y
+				dist = math.hypot(dx, dy)
 
-			if other.shieldUp > 0:
-				# 12 radius of shield?
-				# this also means that own bullets (being shot)
-				# can not go from inside to outside shield
-				if dist <= 12:
-					other.applyForce(self.vel / 5, self.dir)
-					if self.ttl > 0:
-						self.ttl = 0
-			else: # noshield
-				# 5 radius is ship damage?
-				if dist <= 5: 
-					other.applyForce(self.vel / 10, self.dir)
-					other.health -= 25
-					if self.ttl > 0:
-						self.ttl = 0
+				if other.shieldUp > 0:
+					# 12 radius of shield?
+					# this also means that own bullets (being shot)
+					# can not go from inside to outside shield
+					if dist <= 12:
+						other.applyForce(self.vel / 5, self.dir)
+						if self.ttl > 0:
+							self.ttl = 0
+				else: # noshield
+					# 5 radius is ship damage?
+					if dist <= 5: 
+						other.applyForce(self.vel / 10, self.dir)
+						other.health -= 25
+						if self.ttl > 0:
+							self.ttl = 0
 
-		if isinstance(other, GravityWell):
-			dx = self.x - other.x
-			dy = self.y - other.y
-			dist = math.hypot(dx, dy)
-			if dist <= other.rad and self.ttl > 0:
-				self.ttl = 0
+			if isinstance(other, GravityWell):
+				dx = self.x - other.x
+				dy = self.y - other.y
+				dist = math.hypot(dx, dy)
+				if dist <= other.rad and self.ttl > 0:
+					self.ttl = 0
 		
