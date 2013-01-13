@@ -3,6 +3,12 @@ from math import cos, sin
 import spacewar
 from spacewar import SIZE, WIDTH, HEIGHT
 
+def enum(*sequential, **named):
+	enums = dict(zip(sequential, range(len(sequential))), **named)
+	reverse = dict((value, key) for key, value in enums.iteritems())
+	enums['reverse'] = reverse
+	return type('Enum', (), enums)
+
 def getDeg(dx, dy):
 	'Helper function that returns degree based on slope'
 	hyp = math.hypot(dx, dy)
@@ -12,20 +18,6 @@ def getDeg(dx, dy):
 	if dy < 0:
 		deg = 360 - deg
 	return deg
-
-def rotateAndMove(points, rot, (x,y)):
-	'Helper function to rotate list of points'
-	# then rotate according to our rot
-	rad = math.radians(rot)
-	for point in points:
-		curx = point[0]
-		cury = point[1]
-		point[0] = curx*cos(rad) - cury*sin(rad)
-		point[1] = curx*sin(rad) + cury*cos(rad)
-
-	for point in points:
-		point[0] += x
-		point[1] += y
 
 class Movable:
 	'Super class for movable game objects'
@@ -82,12 +74,18 @@ class Player(Movable):
 	use['jump'] = 75
 
 	# default recharge rates (per frame)
+	# these are considered to be at 50%
 	rate = {}
 	rate['repair'] = 0.05
 	rate['ammo']   = 0.2
 	rate['shield'] = 0.25
-	rate['engine'] = 1
+	rate['engine'] = 1.0
 	rate['jump']   = 0.25
+
+	# TODO if rate is too low some systems should degrade
+	# Perhapse define a wear rate for each system as well? 
+
+	system = enum('repair', 'ammo', 'shield', 'engine', 'jump')
 
 	def __init__(self, color, x, y, rot, healthLoc, livesLoc):
 		Movable.__init__(self, x, y, 0, 0)
@@ -111,6 +109,7 @@ class Player(Movable):
 		self.accelerating = 0
 		self.shooting = 0
 		self.shieldUp = 0
+		self.system = 0
 
 		# UI elements for this player
 		font = pygame.font.SysFont('monospace', 12)
@@ -138,11 +137,12 @@ class Player(Movable):
 		self.enginep = 100
 		self.jump = 100
 
-		self.repairRate = Player.rate['repair']
-		self.ammoRate   = Player.rate['ammo']
-		self.shieldRate = Player.rate['shield']
-		self.engineRate = Player.rate['engine']
-		self.jumpRate   = Player.rate['jump']
+		self.rate = {}
+		self.rate['repair'] = Player.rate['repair']
+		self.rate['ammo']   = Player.rate['ammo']
+		self.rate['shield'] = Player.rate['shield']
+		self.rate['engine'] = Player.rate['engine']
+		self.rate['jump']   = Player.rate['jump']
 
 	def update(self, others=None):
 		Movable.update(self)
@@ -159,15 +159,126 @@ class Player(Movable):
 
 		# energy management
 		if self.health < 100:
-			self.health += self.repairRate
+			self.health += self.rate['repair']
 		if self.ammo < 100:
-			self.ammo += self.ammoRate
+			self.ammo += self.rate['ammo']
 		if self.shieldp < 100:
-			self.shieldp += self.shieldRate
+			self.shieldp += self.rate['shield']
 		if self.enginep < 100:
-			self.enginep += self.engineRate
+			self.enginep += self.rate['engine']
 		if self.jump < 100:
-			self.jump += self.jumpRate
+			self.jump += self.rate['jump']
+
+	def rotate(self, val):
+		self.rot = self.rot + val
+		if self.rot > 360:
+			self.rot -= 360
+		elif self.rot < -360:
+			self.rot += 360
+
+	def accellerate(self, val):
+		if self.enginep > 5:
+			self.applyForce(val, self.rot)
+			self.accelerating = 2
+			self.enginep -= Player.use['engine']
+
+	def shoot(self):
+		if self.shooting == 0 and self.ammo >= 2:
+			rad = math.radians(self.rot)
+			x = self.x + math.cos(rad) * 7
+			y = self.y + math.sin(rad) * 7
+			
+			b = Bullet(x, y, self.vel, self.dir, self.color)
+			b.applyForce(3, self.rot)
+			b.update()
+
+			self.shooting = 3
+			self.ammo -= Player.use['ammo']
+			return b
+		else:
+			return False
+
+	def shield(self):
+		if self.shieldp >= 2:
+			self.shieldUp = 2 # will be reduced by 1 before display
+			self.shieldp -= Player.use['shield']
+
+	def hyperjump(self):
+		# Question: should we maintain velocity after jumping?
+		# Answer: not sure, we'll say yes for now
+		if self.jump >= 75: 
+			self.x = random.randrange(0, WIDTH)
+			self.y = random.randrange(0, HEIGHT)
+			self.jump -= Player.use['jump']
+
+	def nextsystem(self, inc=1):
+		self.system = (self.system + inc) % 5
+
+	def __adjustenergy(self, systemnum, amount, test=False):
+		'''private helper function takes system number, amount
+		and whether it should just test or actually do it
+		returns how much actually adjusted'''
+
+		# get system name from system number
+		system = Player.system.reverse[systemnum]
+
+		# normalize the rate into range 0-100
+		rate = self.rate[system] / (Player.rate[system] / 50)
+
+		added = amount
+		if rate + amount > 100:
+			added = 100 - rate
+			rate = 100
+		elif rate + amount < 0:
+			added = -rate
+			rate = 0
+		else:
+			rate += amount
+
+		# convert back and store
+		if test != True:
+			self.rate[system] = rate * (Player.rate[system] / 50)
+
+		return added
+	
+	def energy(self, amount=1):
+		# test how much we can add
+		toadd = self.__adjustenergy(self.system, amount, test=True)
+		
+		# exit out if we're not doing anything anyway
+		if toadd == 0:
+			return
+
+		# toadd needs to come from other systems' energy
+		ignored = [self.system]
+		removed = False
+
+		while not removed:
+			adjust = float(-toadd) / (5 - len(ignored))
+			cando = True
+
+			# find systems that can support adjustment
+			for i in range(5):
+				if i not in ignored:
+					possible = self.__adjustenergy(i, adjust, test=True)
+					if possible != adjust:
+						ignored.append(i)
+						cando = False
+						break; # and try with less systems
+
+			# actually do it
+			if cando:
+				for i in range(5):
+					if i not in ignored:
+						self.__adjustenergy(i, adjust)
+				removed = True
+
+		#for i in ignored:
+		#	system = Player.system.reverse[i]
+		#	print(i, self.rate[system] / (Player.rate[system] / 50), len(ignored))
+
+		# now that it's removed from others actually add to self
+		self.__adjustenergy(self.system, toadd)
 
 
 	def checkCollision(self, other):
@@ -226,47 +337,20 @@ class Player(Movable):
 			if hyp <= other.rad:
 				self.reset()
 
-	def rotate(self, val):
-		self.rot = self.rot + val
-		if self.rot > 360:
-			self.rot -= 360
-		elif self.rot < -360:
-			self.rot += 360
+	@staticmethod
+	def rotateAndMove(points, rot, (x,y)):
+		'Helper function to rotate list of points'
+		# then rotate according to our rot
+		rad = math.radians(rot)
+		for point in points:
+			curx = point[0]
+			cury = point[1]
+			point[0] = curx*cos(rad) - cury*sin(rad)
+			point[1] = curx*sin(rad) + cury*cos(rad)
 
-	def accellerate(self, val):
-		if self.enginep > 5:
-			self.applyForce(val, self.rot)
-			self.accelerating = 2
-			self.enginep -= Player.use['engine']
-
-	def shoot(self):
-		if self.shooting == 0 and self.ammo >= 2:
-			rad = math.radians(self.rot)
-			x = self.x + math.cos(rad) * 7
-			y = self.y + math.sin(rad) * 7
-			
-			b = Bullet(x, y, self.vel, self.dir, self.color)
-			b.applyForce(3, self.rot)
-			b.update()
-
-			self.shooting = 3
-			self.ammo -= Player.use['ammo']
-			return b
-		else:
-			return False
-
-	def shield(self):
-		if self.shieldp >= 2:
-			self.shieldUp = 2 # will be reduced by 1 before display
-			self.shieldp -= Player.use['shield']
-
-	def hyperjump(self):
-		# Question: should we maintain velocity after jumping?
-		# Answer: not sure, we'll say yes for now
-		if self.jump >= 75: 
-			self.x = random.randrange(0, WIDTH)
-			self.y = random.randrange(0, HEIGHT)
-			self.jump -= Player.use['jump']
+		for point in points:
+			point[0] += x
+			point[1] += y
 
 	@staticmethod
 	def renderShip(surface, (x,y), rot, color, accel=False):
@@ -280,7 +364,7 @@ class Player(Movable):
 		points.append([-5, -5])
 
 		# do rotation, and move to screen position
-		rotateAndMove(points, rot, (x,y)) 
+		Player.rotateAndMove(points, rot, (x,y)) 
 
 		# draw player at current location
 		pygame.draw.polygon(surface, color, points)
@@ -292,7 +376,7 @@ class Player(Movable):
 			points.append([-4,-1])
 			points.append([-6,0])
 			points.append([-4,1])
-			rotateAndMove(points, rot, (x,y))
+			Player.rotateAndMove(points, rot, (x,y))
 			pygame.draw.polygon(surface, (225,225,0), points)
 
 	def display(self, surface):
@@ -308,19 +392,6 @@ class Player(Movable):
 		barx = self.healthLoc[0]
 		bary = self.healthLoc[1]
 
-		# first draw containing rectangle
-		rect = pygame.Rect(barx, bary, 100, 10) 
-		pygame.draw.rect(surface, self.uicolor, rect, 1)
-
-		# then the actual health bar
-		level = pygame.Rect(barx, bary, self.health, 10) 
-		pygame.draw.rect(surface, self.uicolor, level)
-
-		# draw repair rate line
-		rateColor = (0,255,0,128)
-		rate = 50 / Player.rate['repair'] * self.repairRate 
-		pygame.draw.line(surface, rateColor, (barx, bary + 12), (barx + rate, bary + 12))
-
 		# draw extra lives for this player
 		livesx = self.livesLoc[0]
 		livesy = self.livesLoc[1]
@@ -335,6 +406,19 @@ class Player(Movable):
 			Player.renderShip(surface, (livesx, livesy), 270, self.uicolor)
 			livesx += livesdx
 
+		# first draw containing rectangle
+		rect = pygame.Rect(barx, bary, 100, 10) 
+		pygame.draw.rect(surface, self.uicolor, rect, 1)
+
+		# then the actual health bar
+		level = pygame.Rect(barx, bary, self.health, 10) 
+		pygame.draw.rect(surface, self.uicolor, level)
+
+		# draw repair rate line
+		rateColor = (0,255,0,128)
+		rate = 50 / Player.rate['repair'] * self.rate['repair']
+		pygame.draw.line(surface, rateColor, (barx, bary + 12), (barx + rate, bary + 12))
+
 		# draw 'H' letter beside health bar
 		textx = self.healthLoc[0] - 10
 		if livesx < barx:
@@ -342,7 +426,7 @@ class Player(Movable):
 		texty = self.healthLoc[1] - 1
 		surface.blit(self.uitext[0], (textx, texty))
 
-		# ammo bar
+		# ammo bar - FIXME refactor: bar code is copy pasted several times
 		rect.y += 15
 		pygame.draw.rect(surface, self.uicolor, rect, 1)
 
@@ -353,7 +437,7 @@ class Player(Movable):
 		texty += 15
 		surface.blit(self.uitext[1], (textx, texty))
 
-		rate = 50 / Player.rate['ammo'] * self.ammoRate
+		rate = 50 / Player.rate['ammo'] * self.rate['ammo']
 		pygame.draw.line(surface, rateColor, (barx, bary + 12), (barx + rate, bary + 12))
 
 		# shield bar
@@ -364,7 +448,7 @@ class Player(Movable):
 		pygame.draw.rect(surface, self.uicolor, level)
 		texty += 15
 		surface.blit(self.uitext[2], (textx, texty))
-		rate = 50 / Player.rate['shield'] * self.shieldRate
+		rate = 50 / Player.rate['shield'] * self.rate['shield']
 		pygame.draw.line(surface, rateColor, (barx, bary + 12), (barx + rate, bary + 12))
 
 		# engine bar
@@ -375,7 +459,7 @@ class Player(Movable):
 		pygame.draw.rect(surface, self.uicolor, level)
 		texty += 15
 		surface.blit(self.uitext[3], (textx, texty))
-		rate = 50 / Player.rate['engine'] * self.engineRate
+		rate = 50 / Player.rate['engine'] * self.rate['engine']
 		pygame.draw.line(surface, rateColor, (barx, bary + 12), (barx + rate, bary + 12))
 
 		# Jump bar
@@ -386,7 +470,7 @@ class Player(Movable):
 		pygame.draw.rect(surface, self.uicolor, level)
 		texty += 15
 		surface.blit(self.uitext[4], (textx, texty))
-		rate = 50 / Player.rate['jump'] * self.jumpRate
+		rate = 50 / Player.rate['jump'] * self.rate['jump']
 		pygame.draw.line(surface, rateColor, (barx, bary + 12), (barx + rate, bary + 12))
 
 

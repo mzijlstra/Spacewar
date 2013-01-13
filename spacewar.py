@@ -69,6 +69,19 @@ class Game:
 			if event.type == pygame.QUIT:
 				quit()
 
+			elif event.type == pygame.KEYDOWN:
+				# player 1 system selection
+				if event.key == pygame.K_TAB:
+					self.player1.nextsystem(1)
+				elif event.key == pygame.K_BACKQUOTE:
+					self.player1.nextsystem(-1)
+				# player 2 system selection
+				elif event.key == pygame.K_BACKSLASH:
+					self.player2.nextsystem(1)
+				elif event.key == pygame.K_BACKSPACE:
+					self.player2.nextsystem(-1)
+					
+
 		# general input
 		keys = pygame.key.get_pressed()
 		if keys[pygame.K_ESCAPE]:
@@ -76,7 +89,7 @@ class Game:
 
 		# while we haven't lost / won
 		if self.winner == False:
-			# player 1 input
+			# player 1 input - movement
 			if keys[pygame.K_d]:
 				self.player1.rotate(+5)
 			if keys[pygame.K_a]:
@@ -85,6 +98,8 @@ class Game:
 				self.player1.accellerate(+0.25)
 			if keys[pygame.K_s]:
 				self.player1.accellerate(-0.1)
+
+			# actions: shoot, jump, shield
 			if keys[pygame.K_LSHIFT]:
 				b = self.player1.shoot()
 				if b != False:
@@ -93,8 +108,15 @@ class Game:
 				self.player1.hyperjump()
 			if keys[pygame.K_LCTRL]:
 				self.player1.shield()
+			
+			# energy management:
+			if keys[pygame.K_q]:
+				self.player1.energy(-1)
+			if keys[pygame.K_e]:
+				self.player1.energy(+1)
 
-			# player 2 input
+
+			# player 2 input - movement
 			if keys[pygame.K_RIGHT]:
 				self.player2.rotate(+5)
 			if keys[pygame.K_LEFT]:
@@ -103,6 +125,8 @@ class Game:
 				self.player2.accellerate(+0.25)
 			if keys[pygame.K_DOWN]:
 				self.player2.accellerate(-0.1)
+
+			# actions: shoot, jump, shield
 			if keys[pygame.K_RSHIFT]:
 				b = self.player2.shoot()
 				if b != False:
@@ -111,6 +135,12 @@ class Game:
 				self.player2.hyperjump()
 			if keys[pygame.K_PERIOD]:
 				self.player2.shield()
+
+			# energy management:
+			if keys[pygame.K_LEFTBRACKET]:
+				self.player2.energy(-1)
+			if keys[pygame.K_RIGHTBRACKET]:
+				self.player2.energy(+1)
 
 			# do updates and check collisions
 			for thing in self.things:
