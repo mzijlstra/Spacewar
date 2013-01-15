@@ -81,8 +81,11 @@ class Player(Movable):
 	rate['shield'] = 0.25
 	rate['engine'] = 1.0
 	rate['jump']   = 0.25
+
+	# different UI colors
 	rateColor = (0,255,0,128)
 	selectedRateColor = (255, 255, 128, 200)
+	notReady = (128,128,128,128)
 
 	# TODO if rate is too low some systems should degrade
 	# Perhapse define a wear rate for each system as well? 
@@ -389,8 +392,11 @@ class Player(Movable):
 		pygame.draw.rect(surface, self.uicolor, rect, 1)
 		
 		# draw power level for this system
+		color = self.uicolor
+		if system != 'hull' and self.system[system] < Player.use[system]:
+			color = Player.notReady
 		power = pygame.Rect(rect.x, rect.y, self.system[system], 10) 
-		pygame.draw.rect(surface, self.uicolor, power)
+		pygame.draw.rect(surface, color, power)
 		
 		# blit system letter
 		texty = rect.y - 1
