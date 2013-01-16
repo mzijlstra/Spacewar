@@ -2,19 +2,46 @@ import pygame, os, sys, math
 from math import cos, sin
 from classes import *
 		
+class MenuItem:
+	def __init__(self, text, action):
+		self.text = text
+		self.action = action
+
+	def getText(self):
+		return self.text
+
+	def doAction(self):
+		self.action()
+
+	def nextValue(self, num):
+		pass
+
+
+class MenuValues:
+	def __init__(self, text, values):
+		self.text = text
+		self.values = values
+		self.curval = 0
+
+	def getText(self):
+		return '{} {}'.format(self.text, self.values[self.curval])
+
+	def doAction(self):
+		pass
+
+	def nextValue(self, num):
+		self.curval = (self.curval + num) % len(self.values)
+		
+
 class Menu:
 	fontsize = 25
 	textcolor = (255,255,255)
 	highlight = (255,255,0)
 
-	def __init__(self, options, actions):
-		if len(options) != len(actions):
-			raise ValueError('Options and Actions do not match')
-
+	def __init__(self, items):
 		self.font = pygame.font.SysFont('monospace', Menu.fontsize)
 		self.font.set_bold(True)
-		self.options = options
-		self.actions = actions
+		self.items = items
 		self.selected = 0
 	
 	def loop(self, screen):
@@ -24,21 +51,21 @@ class Menu:
 				quit()
 			if event.type == pygame.KEYDOWN and event.key in \
 					(pygame.K_UP, pygame.K_a):
-				self.selected = (self.selected - 1) % len(self.options)
+				self.selected = (self.selected - 1) % len(self.items)
 			if event.type == pygame.KEYDOWN and event.key in \
 					(pygame.K_DOWN, pygame.K_s):
-				self.selected = (self.selected + 1) % len(self.options)
+				self.selected = (self.selected + 1) % len(self.items)
 			if event.type == pygame.KEYDOWN and event.key in \
 					(pygame.K_SPACE, pygame.K_RETURN):
-				self.actions[self.selected]()
+				self.items[self.selected].doAction()
 		
 		# render menu items	
-		for i in range(len(self.options)):
+		for i in range(len(self.items)):
 			color = Menu.textcolor
 			if i == self.selected:
 				color = Menu.highlight
 
-			text = self.font.render(self.options[i], 1, color)
+			text = self.font.render(self.items[i].getText(), 1, color)
 			screen.blit(text, (WIDTH*0.25, HEIGHT*0.25 + Menu.fontsize*2*i))
 
 
@@ -217,13 +244,14 @@ def main():
 			global GAME
 			STATE = GAME
 
-		if MAINMENU.options[0] != 'Resume':
-			MAINMENU.options.insert(0, 'Resume')
-			MAINMENU.actions.insert(0, resumeAction)
+		if MAINMENU.items[0].text != 'Resume':
+			MAINMENU.items.insert(0, MenuItem('Resume', resumeAction))
 
+	items = []
+	items.append(MenuItem('New Game', startAction))
+	items.append(MenuItem('Quit', quit))
 	options = ['New Game','Quit']
-	actions = [startAction, quit]
-	MAINMENU = Menu(options, actions)
+	MAINMENU = Menu(items)
 
 	# start in the main menu
 	STATE = MAINMENU
