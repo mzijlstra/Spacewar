@@ -31,12 +31,12 @@ def resumeAction():
 	State().current = State().game
 
 def startAction():
-	game = g.Game()
+	game = g.Game(backToMainMenu)
 	State().game = game
 	State().current = game
 
 	if State().mainMenu.items[0].text != 'Resume':
-		State().mainMenu.items.insert(0, MenuItem('Resume', resumeAction))
+		State().mainMenu.items.insert(0, m.MenuItem('Resume', resumeAction))
 
 def backToMainMenu():
 	State().current = State().mainMenu

@@ -1,19 +1,22 @@
+import pygame
 import classes as c
+import menus as m
 import spacewar as sw
 
 class Game:
-	def __init__(self):
+	def __init__(self, backToMain):
+		self.backToMain = backToMain
 		c1 = (255,100,100, 250) # would be nice to have player colors in settings
 		c2 = (100,100,255, 250)
-		self.player1 = c.Player(c1, WIDTH/2 - WIDTH/4, HEIGHT/2, 180, (20,20), (130,25))
-		self.player2 = c.Player(c2, WIDTH/2 + WIDTH/4, HEIGHT/2, 0, (WIDTH - 120, 20), (WIDTH - 130, 25))
-		self.blackhole = c.GravityWell(WIDTH/2, HEIGHT/2, 15, 5.5)
+		self.player1 = c.Player(c1, sw.WIDTH/2 - sw.WIDTH/4, sw.HEIGHT/2, 180, (20,20), (130,25))
+		self.player2 = c.Player(c2, sw.WIDTH/2 + sw.WIDTH/4, sw.HEIGHT/2, 0, (sw.WIDTH - 120, 20), (sw.WIDTH - 130, 25))
+		self.blackhole = c.GravityWell(sw.WIDTH/2, sw.HEIGHT/2, 15, 5.5)
 
 		self.things = [self.player1, self.player2, self.blackhole]
-		self.buff = pygame.Surface(SIZE, flags=pygame.SRCALPHA, depth=32)
+		self.buff = pygame.Surface(sw.SIZE, flags=pygame.SRCALPHA, depth=32)
 
 		self.winner = False
-		self.font = pygame.font.SysFont('monospace', Menu.fontsize)
+		self.font = pygame.font.SysFont('monospace', m.Menu.fontsize)
 		self.font.set_bold(True)
 		self.textcolor = (255,255,255)
 		
@@ -41,8 +44,7 @@ class Game:
 		# general input
 		keys = pygame.key.get_pressed()
 		if keys[pygame.K_ESCAPE]:
-			# FIXME 
-			sw.backToMainMenu()
+			self.backToMain()
 
 		# while we haven't lost / won
 		if self.winner == False:
@@ -129,7 +131,7 @@ class Game:
 		if self.winner != False:
 			text = self.font.render(self.winner, 1, self.textcolor)
 			rect = text.get_rect()
-			self.buff.blit(text, (WIDTH/2 - rect.w / 2, HEIGHT/4))
+			self.buff.blit(text, (sw.WIDTH/2 - rect.w / 2, sw.HEIGHT/4))
 
 		# draw buffer onto the screen (alpha blending)
 		screen.blit(self.buff, (0,0))
