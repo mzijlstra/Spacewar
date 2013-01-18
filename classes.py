@@ -1,7 +1,6 @@
 import pygame, math, random
 from math import cos, sin
-import spacewar
-from spacewar import SIZE, WIDTH, HEIGHT
+import spacewar as sw
 
 def enum(*sequential, **named):
 	enums = dict(zip(sequential, range(len(sequential))), **named)
@@ -34,15 +33,15 @@ class Movable:
 		dy = sin(rad) * self.vel
 		self.x += dx
 		self.y += dy
-		if self.x > WIDTH:
+		if self.x > sw.WIDTH:
 			self.x = 0
 		elif self.x < 0:
-			self.x = WIDTH
+			self.x = sw.WIDTH
 
-		if self.y > HEIGHT:
+		if self.y > sw.HEIGHT:
 			self.y = 0
 		elif self.y < 0:
-			self.y = HEIGHT
+			self.y = sw.HEIGHT
 	
 	def applyForce(self, val, direction):
 		rad = math.radians(self.dir)
@@ -212,8 +211,8 @@ class Player(Movable):
 		# Question: should we maintain velocity after jumping?
 		# Answer: not sure, we'll say yes for now
 		if self.system['jump'] >= 75: 
-			self.x = random.randrange(0, WIDTH)
-			self.y = random.randrange(0, HEIGHT)
+			self.x = random.randrange(0, sw.WIDTH)
+			self.y = random.randrange(0, sw.HEIGHT)
 			self.system['jump'] -= Player.use['jump']
 
 	def nextsystem(self, inc=1):
@@ -278,11 +277,6 @@ class Player(Movable):
 						self.__adjustenergy(i, adjust)
 				removed = True
 
-		#for i in ignored:
-		#	system = Player.system.reverse[i]
-		#	print(i, self.rate[system] / (Player.rate[system] / 50), len(ignored))
-
-		# now that it's removed from others actually add to self
 		self.__adjustenergy(self.cursysnum, toadd)
 
 
