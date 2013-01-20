@@ -27,21 +27,31 @@ class Movable:
 		self.vel = vel
 		self.dir = dir
 
+	def resize(self, width, height):
+		oldW = Movable.state.width
+		newW = width
+		oldH = Movable.state.height
+		newH = height
+		
+		self.x = int((self.x / float(oldW)) * newW)
+		self.y = int((self.y / float(oldH)) * newH)
+		
+
 	def update(self):
 		rad = math.radians(self.dir)
 		dx = cos(rad) * self.vel
 		dy = sin(rad) * self.vel
 		self.x += dx
 		self.y += dy
-		if self.x > sw.WIDTH:
+		if self.x > Movable.state.width:
 			self.x = 0
 		elif self.x < 0:
-			self.x = sw.WIDTH
+			self.x = Movable.state.width
 
-		if self.y > sw.HEIGHT:
+		if self.y > Movable.state.height:
 			self.y = 0
 		elif self.y < 0:
-			self.y = sw.HEIGHT
+			self.y = Movable.state.height
 	
 	def applyForce(self, val, direction):
 		rad = math.radians(self.dir)
@@ -82,7 +92,7 @@ class Player(Movable):
 	rate['jump']   = 0.25
 
 	# different UI colors
-	rateColor = (0,255,0,128)
+	rateColor = (100,225,100,200)
 	selectedRateColor = (255, 255, 128, 200)
 	notReady = (128,128,128,128)
 
@@ -91,7 +101,7 @@ class Player(Movable):
 
 	system = enum('hull', 'ammo', 'shield', 'engine', 'jump')
 
-	def __init__(self, color, x, y, rot, barLoc, livesLoc):
+	def __init__(self, color, x, y, rot, uiLoc):
 		Movable.__init__(self, x, y, 0, 0)
 		self.color = color
 		self.rot = rot # angle we're facing
@@ -120,14 +130,56 @@ class Player(Movable):
 		# UI elements for this player
 		font = pygame.font.SysFont('monospace', 12)
 		self.uicolor = self.color[0], self.color[1], self.color[2], 128
-		self.barLoc = barLoc
-		self.livesLoc = livesLoc
+		
+		self.uiLoc = uiLoc
+		if uiLoc == 'left':
+			self.barLoc = (20, 20)
+			self.livesLoc = (130, 25)
+		elif uiLoc == 'right':
+			self.barLoc = (Movable.state.width - 120, 20)
+			self.livesLoc = (Movable.state.width - 130, 25)
+
 		self.uitext = []
 		self.uitext.append(font.render('H', 1, self.uicolor))
 		self.uitext.append(font.render('A', 1, self.uicolor))
 		self.uitext.append(font.render('S', 1, self.uicolor))
 		self.uitext.append(font.render('E', 1, self.uicolor))
 		self.uitext.append(font.render('J', 1, self.uicolor))
+
+	def drawBg(self, surface):
+		rect = pygame.Rect(self.barLoc[0], self.barLoc[1], 100, 10)
+		textx = self.barLoc[0] - 10
+		if self.uiLoc == 'right':
+			textx = self.barLoc[0] + 105
+
+		for sysnum in range(5):	
+			# draw containing rectangle
+			pygame.draw.rect(surface, self.uicolor, rect, 1)
+
+			# blit system letter
+			texty = rect.y - 1
+			surface.blit(self.uitext[sysnum], (textx, rect.y - 1))
+
+			# increment to draw next rect
+			rect.y += 15
+
+	def resize(self, width, height):
+		# reset current location
+		Movable.resize(self, width, height)
+
+		oldW = Movable.state.width
+		newW = width
+		oldH = Movable.state.height
+		newH = height
+		
+		# reset UI location
+		if self.uiLoc == 'right':
+			self.barLoc = (newW - 120, 20)
+			self.livesLoc = (newW - 130, 25)
+
+		# reset respawn location
+		self.orig['x'] = int((self.orig['x'] / float(oldW)) * newW)
+		self.orig['y'] = int((self.orig['y'] / float(oldH)) * newH)
 
 	def reset(self):
 		self.lives -= 1
@@ -211,8 +263,8 @@ class Player(Movable):
 		# Question: should we maintain velocity after jumping?
 		# Answer: not sure, we'll say yes for now
 		if self.system['jump'] >= 75: 
-			self.x = random.randrange(0, sw.WIDTH)
-			self.y = random.randrange(0, sw.HEIGHT)
+			self.x = random.randrange(0, Movable.state.width)
+			self.y = random.randrange(0, Movable.state.height)
 			self.system['jump'] -= Player.use['jump']
 
 	def nextsystem(self, inc=1):
@@ -378,12 +430,9 @@ class Player(Movable):
 			Player.rotateAndMove(points, rot, (x,y))
 			pygame.draw.polygon(surface, (225,225,0), points)
 
-	def drawShipSystem(self, surface, rect, sysnum, textx): 
+	def drawSystemEnergy(self, surface, rect, sysnum): 
 		# get system name from number
 		system = Player.system.reverse[sysnum]
-		
-		# draw containing rectangle
-		pygame.draw.rect(surface, self.uicolor, rect, 1)
 		
 		# draw power level for this system
 		color = self.uicolor
@@ -392,10 +441,6 @@ class Player(Movable):
 		power = pygame.Rect(rect.x, rect.y, self.system[system], 10) 
 		pygame.draw.rect(surface, color, power)
 		
-		# blit system letter
-		texty = rect.y - 1
-		surface.blit(self.uitext[sysnum], (textx, rect.y - 1))
-
 		# draw the recharge rate line
 		rate = 50 / Player.rate[system] * self.rate[system]
 		color = Player.rateColor
@@ -433,16 +478,12 @@ class Player(Movable):
 
 		# draw the power levels for the different ship systems
 		rect = pygame.Rect(barx, bary, 100, 10) 
-		textx = self.barLoc[0] - 10
-		if livesx < barx:
-			textx = self.barLoc[0] + 105
-
 		for i in range(5):
-			self.drawShipSystem(surface, rect, i, textx)
+			self.drawSystemEnergy(surface, rect, i)
 			rect.y += 15
 
 
-class GravityWell:
+class GravityWell(Movable):
 	def __init__(self, x, y, rad, force):
 		self.x = x
 		self.y = y
@@ -466,13 +507,17 @@ class GravityWell:
 	def checkCollision(self, other):
 		pass
 
+	def drawBg(self, surface):
+		pygame.draw.circle(surface, (0, 0, 0), (self.x, self.y), self.rad)
+		pygame.draw.circle(surface, (255,255,255), (self.x, self.y), self.rad, 1)
+		pygame.draw.circle(surface, (200,200,200), (self.x, self.y), self.rad + 1, 1)
+		pygame.draw.circle(surface, (150,150,150), (self.x, self.y), self.rad + 2, 1)
+		pygame.draw.circle(surface, (100,100,100), (self.x, self.y), self.rad + 3, 1)
+		pygame.draw.circle(surface, (55,55,55), (self.x, self.y), self.rad + 4, 1)
+		pygame.draw.circle(surface, (25,25,25), (self.x, self.y), self.rad + 5, 1)
+
 	def display(self, surface):
-		pygame.draw.circle(surface, (255,255,255,255), (self.x, self.y), self.rad, 1)
-		pygame.draw.circle(surface, (255,255,255,200), (self.x, self.y), self.rad + 1, 1)
-		pygame.draw.circle(surface, (255,255,255,150), (self.x, self.y), self.rad + 2, 1)
-		pygame.draw.circle(surface, (255,255,255,100), (self.x, self.y), self.rad + 3, 1)
-		pygame.draw.circle(surface, (255,255,255,55), (self.x, self.y), self.rad + 4, 1)
-		pygame.draw.circle(surface, (255,255,255,25), (self.x, self.y), self.rad + 5, 1)
+		pass # already on Background 
 
 class Bullet(Movable):
 	# not super happy with these explosion colors, but they'll have to do for now

@@ -1,24 +1,55 @@
-import pygame
+import pygame, random
 import classes as c
 import menus as m
 import spacewar as sw
 
 class Game:
-	def __init__(self, backToMain):
-		self.backToMain = backToMain
+	def __init__(self, state):
+		self.state = state
+		SIZE = WIDTH, HEIGHT = state.size
 		c1 = (255,100,100, 250) # would be nice to have player colors in settings
 		c2 = (100,100,255, 250)
-		self.player1 = c.Player(c1, sw.WIDTH/2 - sw.WIDTH/4, sw.HEIGHT/2, 180, (20,20), (130,25))
-		self.player2 = c.Player(c2, sw.WIDTH/2 + sw.WIDTH/4, sw.HEIGHT/2, 0, (sw.WIDTH - 120, 20), (sw.WIDTH - 130, 25))
-		self.blackhole = c.GravityWell(sw.WIDTH/2, sw.HEIGHT/2, 15, 5.5)
+		self.player1 = c.Player(c1, WIDTH/2 - WIDTH/4, HEIGHT/2, 180, 'left')
+		self.player2 = c.Player(c2, WIDTH/2 + WIDTH/4, HEIGHT/2, 0, 'right')
+		self.blackhole = c.GravityWell(WIDTH/2, HEIGHT/2, 15, 5.5)
 
 		self.things = [self.player1, self.player2, self.blackhole]
-		self.buff = pygame.Surface(sw.SIZE, flags=pygame.SRCALPHA, depth=32)
+		self.buff = pygame.Surface(SIZE, flags=pygame.SRCALPHA, depth=32)
+		self.buff = self.buff.convert_alpha()
+		self.createBackGround(WIDTH, HEIGHT)
 
 		self.winner = False
 		self.font = pygame.font.SysFont('monospace', m.Menu.fontsize)
 		self.font.set_bold(True)
 		self.textcolor = (255,255,255)
+
+	def createBackGround(self, width, height):
+		self.bg = pygame.Surface((width, height), flags=pygame.SRCALPHA, depth=32)
+		self.bg.fill((0,0,0))
+
+		# draw stars
+		pxarray = pygame.PixelArray(self.bg)
+		for i in range(3000):
+			x = random.randrange(width)	
+			y = random.randrange(height)
+			c = random.randrange(256)
+			pxarray[x][y] = (c, c, c)
+		del pxarray
+
+		# draw elements that don't change
+		self.player1.drawBg(self.bg)
+		self.player2.drawBg(self.bg)
+		self.blackhole.drawBg(self.bg)
+
+		self.bg = self.bg.convert()
+
+	def resize(self, width, height): 
+		for thing in self.things:
+			thing.resize(width, height)
+		
+		self.buff = pygame.Surface((width, height), flags=pygame.SRCALPHA, depth=32)
+		self.buff = self.buff.convert_alpha()
+		self.createBackGround(width, height)
 		
 	def loop(self, screen):
 		'Main game loop checks input, does state updates, draws game to screen'
@@ -44,7 +75,7 @@ class Game:
 		# general input
 		keys = pygame.key.get_pressed()
 		if keys[pygame.K_ESCAPE]:
-			self.backToMain()
+			self.state.current = self.state.mainMenu
 
 		# while we haven't lost / won
 		if self.winner == False:
@@ -117,11 +148,16 @@ class Game:
 			elif self.player2.lives < 0:
 				self.winner = 'Player 1 has won!'
 				self.textcolor = self.player1.color
+
+			# remove resume if game is over
 			if self.player1.lives < 0 or self.player2.lives < 0:
-				State().mainMenu.items.pop(0)
+				self.state.mainMenu.items.pop(0)
+
+		# initialize screen
+		screen.blit(self.bg, (0,0))
 
 		# clear buffer
-		self.buff.fill((0,0,0))
+		self.buff.fill((0,0,0,0))
 
 		# draw the things
 		for thing in self.things:
@@ -131,7 +167,8 @@ class Game:
 		if self.winner != False:
 			text = self.font.render(self.winner, 1, self.textcolor)
 			rect = text.get_rect()
-			self.buff.blit(text, (sw.WIDTH/2 - rect.w / 2, sw.HEIGHT/4))
+			WIDTH, HEIGHT = self.state.size
+			self.buff.blit(text, (WIDTH/2 - rect.w / 2, HEIGHT/4))
 
 		# draw buffer onto the screen (alpha blending)
 		screen.blit(self.buff, (0,0))

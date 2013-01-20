@@ -49,9 +49,10 @@ class Menu:
 	textcolor = (255,255,255)
 	highlight = (255,255,0)
 
-	def __init__(self, items):
+	def __init__(self, state, items):
 		Menu.font = pygame.font.SysFont('monospace', Menu.fontsize)
 		self.font.set_bold(True)
+		self.state = state
 		self.items = items
 		self.selected = 0
 	
@@ -74,9 +75,12 @@ class Menu:
 				elif event.key in (pygame.K_SPACE, pygame.K_RETURN):
 					self.items[self.selected].doAction()
 		
+		# initialize screen
+		screen.fill((114,159,207))
+
 		# render menu items	
-		x = sw.WIDTH * 0.25
-		y = sw.HEIGHT * 0.25
+		x = self.state.width * 0.25
+		y = self.state.height * 0.25
 		for i in range(len(self.items)):
 			color = Menu.textcolor
 			if i == self.selected:

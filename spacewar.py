@@ -3,15 +3,6 @@ import classes as c
 import games as g
 import menus as m 
 
-# global vars
-#SIZE = WIDTH, HEIGHT = 1280, 800
-SIZE = WIDTH, HEIGHT = 1024,768
-
-# game state global variables
-#STATE = None
-#GAME = None
-#MAINMENU = None
-
 def singleton(cls):
 	instances = {}
 	def getinstance():
@@ -26,30 +17,77 @@ class State:
 		self.mainMenu = None
 		self.current = None
 		self.game = None
+		self.screen = None
+		self.fullscreen = 0
+		self.width = 1024
+		self.height = 768
+		self.size = (self.width, self.height)
 
 def resumeAction():
 	State().current = State().game
 
 def startAction():
-	game = g.Game(backToMainMenu)
-	State().game = game
-	State().current = game
+	state = State()
+	game = g.Game(state)
+	state.game = game
+	state.current = game
 
-	if State().mainMenu.items[0].text != 'Resume':
-		State().mainMenu.items.insert(0, m.MenuItem('Resume', resumeAction))
+	if state.mainMenu.items[0].text != 'Resume':
+		state.mainMenu.items.insert(0, m.MenuItem('Resume', resumeAction))
 
 def backToMainMenu():
 	State().current = State().mainMenu
 
-def confirmOptionsAction():
-	backToMainMenu()
 
 def optionsAction():
+	state = State()
 	items = []
-	items.append(m.MenuValues('Fullscreen', ['Off', 'On'], 0))
+
+	fullint = 0
+	if state.fullscreen != 0:
+		fullint = 1
+	fullscreenOption = m.MenuValues('Fullscreen', ['Off', 'On'], fullint)
+
+	ratioint = 0
+	if state.size == (1280, 720):
+		ratioint = 1
+	elif state.size == (1280, 800):
+		ratioint = 2
+	ratioOption = m.MenuValues('Aspect Ratio', ['4x3', '16x9', '16x10'], ratioint)
+
+	def confirmOptionsAction():
+		if fullint != fullscreenOption.curval or ratioint != ratioOption.curval:
+
+			# get fullscreen value
+			setfull = state.fullscreen
+			if fullscreenOption.curval == 0:
+				setfull = 0
+			elif fullscreenOption.curval == 1:
+				setfull = pygame.FULLSCREEN
+
+			# get aspect ratio value
+			setsize = state.size
+			if items[1].curval == 0:
+				setsize = (1024,768)
+			elif items[1].curval == 1:
+				setsize = (1280,720)
+			elif items[1].curval == 2:
+				setsize = (1280,800)
+
+			# apply changes
+			state.screen = pygame.display.set_mode(setsize, setfull)
+			state.fullscreen = setfull
+			if ratioint != ratioOption.curval and state.game != None:
+				state.game.resize(setsize[0], setsize[1])
+			state.size = state.width, state.height = setsize
+
+		backToMainMenu()
+	
+	items.append(fullscreenOption)
+	items.append(ratioOption)
 	items.append(m.MenuItem('OK', confirmOptionsAction))
 	items.append(m.MenuCancel('Cancel', backToMainMenu))
-	State().current = m.Menu(items)
+	state.current = m.Menu(state, items)
 
 def quit():
 	pygame.quit()
@@ -62,7 +100,8 @@ def main():
 	pygame.font.init()
 
 	# setup the screen, double buffer and game clock
-	screen = pygame.display.set_mode(SIZE)
+	state = State()
+	state.screen = pygame.display.set_mode(state.size)
 	clock = pygame.time.Clock()
 
 	# create main menu
@@ -73,18 +112,16 @@ def main():
 	options = ['New Game','Quit']
 
 	# start in the main menu
-	mainMenu = m.Menu(items)
-	State().mainMenu = mainMenu
-	State().current = mainMenu
+	mainMenu = m.Menu(state, items)
+	state.mainMenu = mainMenu
+	state.current = mainMenu
+	c.Movable.state = state
 
 
 	# core game loop
 	while True:
-		# initialize screen
-		screen.fill((0,0,0))
-
 		# do the loop for the current state (passing in state)
-		State().current.loop(screen)
+		state.current.loop(state.screen)
 
 		# show stuff on screen
 		pygame.display.flip()
