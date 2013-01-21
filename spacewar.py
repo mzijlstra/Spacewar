@@ -1,4 +1,5 @@
 import pygame, os, sys, math
+import ConfigParser 
 import classes as c
 import games as g
 import menus as m 
@@ -18,15 +19,61 @@ class State:
 		self.current = None
 		self.game = None
 		self.screen = None
+
 		self.fullscreen = 0
 		self.width = 1024
 		self.height = 768
+		self.readSettings()
 		self.size = (self.width, self.height)
+	
+	def readSettings(self):
+		parser = ConfigParser.SafeConfigParser()
+		try:
+			parser.read('settings.ini')
+			if parser.has_option('video', 'fullscreen') and \
+				parser.get('video', 'fullscreen') in ['on', 'yes', '1']:
+				self.fullscreen = pygame.FULLSCREEN
+			else:
+				self.fullscreen = 0
+
+			if parser.has_option('video', 'ratio'):
+				if parser.get('video', 'ratio') == '16x9':
+					self.width = 1280
+					self.height = 720
+				elif parser.get('video', 'ratio') == '16x10':
+					self.width = 1200
+					self.height = 800
+		except Exception as e:
+			print(e)
+			self.writeSettings()
+
+	def writeSettings(self):
+		parser = ConfigParser.SafeConfigParser()
+		try:
+			parser.read('settings.ini')
+			if not parser.has_section('video'):
+				parser.add_section('video')
+			parser.set('video', 'fullscreen', 'off' if self.fullscreen == 0 else 'on')
+			ratio = '4x3'
+			if self.height == 768:
+				ratio = '4x3'
+			elif self.height == 720:
+				ratio = '16x9'
+			elif self.height == 800:
+				ratio = '16x10'
+			parser.set('video', 'ratio', ratio)
+
+			file = open('settings.ini', 'w')
+			parser.write(file)
+			file.close()
+		except Exception as e:
+			print(e)
 
 def resumeAction():
 	State().current = State().game
 
 def startAction():
+
 	state = State()
 	game = g.Game(state)
 	state.game = game
@@ -49,9 +96,9 @@ def optionsAction():
 	fullscreenOption = m.MenuValues('Fullscreen', ['Off', 'On'], fullint)
 
 	ratioint = 0
-	if state.size == (1280, 720):
+	if state.height ==  720:
 		ratioint = 1
-	elif state.size == (1280, 800):
+	elif state.height == 800:
 		ratioint = 2
 	ratioOption = m.MenuValues('Aspect Ratio', ['4x3', '16x9', '16x10'], ratioint)
 
@@ -79,7 +126,9 @@ def optionsAction():
 			state.fullscreen = setfull
 			if ratioint != ratioOption.curval and state.game != None:
 				state.game.resize(setsize[0], setsize[1])
-			state.size = state.width, state.height = setsize
+
+			state.size = (state.width, state.height) = setsize
+			state.writeSettings()
 
 		backToMainMenu()
 	
@@ -101,7 +150,7 @@ def main():
 
 	# setup the screen, double buffer and game clock
 	state = State()
-	state.screen = pygame.display.set_mode(state.size)
+	state.screen = pygame.display.set_mode(state.size, state.fullscreen)
 	clock = pygame.time.Clock()
 
 	# create main menu
