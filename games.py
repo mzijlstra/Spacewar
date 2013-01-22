@@ -1,27 +1,32 @@
-import pygame, random
+import pygame, math, random
 import classes as c
 import menus as m
 import spacewar as sw
 
 class Game:
+	color1 = (255,100,100, 250) # TODO would be nice to have player colors in settings
+	color2 = (100,100,255, 250)
+
 	def __init__(self, state):
 		self.state = state
 		SIZE = WIDTH, HEIGHT = state.size
-		c1 = (255,100,100, 250) # would be nice to have player colors in settings
-		c2 = (100,100,255, 250)
-		self.player1 = c.Player(c1, WIDTH/2 - WIDTH/4, HEIGHT/2, 180, 'left')
-		self.player2 = c.Player(c2, WIDTH/2 + WIDTH/4, HEIGHT/2, 0, 'right')
-		self.blackhole = c.GravityWell(WIDTH/2, HEIGHT/2, 15, 5.5)
 
-		self.things = [self.player1, self.player2, self.blackhole]
 		self.buff = pygame.Surface(SIZE, flags=pygame.SRCALPHA, depth=32)
 		self.buff = self.buff.convert_alpha()
-		self.createBackGround(WIDTH, HEIGHT)
 
-		self.winner = False
 		self.font = pygame.font.SysFont('monospace', m.Menu.fontsize)
 		self.font.set_bold(True)
 		self.textcolor = (255,255,255)
+		self.winner = False
+		self.initThings()
+		self.createBackGround(WIDTH, HEIGHT)
+
+	def initThings(self):
+		WIDTH, HEIGHT = self.state.size
+		self.player1 = c.Player(Game.color1, WIDTH/2 - WIDTH/4, HEIGHT/2, 180, 'left')
+		self.player2 = c.Player(Game.color2, WIDTH/2 + WIDTH/4, HEIGHT/2, 0, 'right')
+		self.blackhole = c.GravityWell(WIDTH/2, HEIGHT/2, 15, 5.5)
+		self.things = [self.player1, self.player2, self.blackhole]
 
 	def createBackGround(self, width, height):
 		self.bg = pygame.Surface((width, height), flags=pygame.SRCALPHA, depth=32)
@@ -37,9 +42,8 @@ class Game:
 		del pxarray
 
 		# draw elements that don't change
-		self.player1.drawBg(self.bg)
-		self.player2.drawBg(self.bg)
-		self.blackhole.drawBg(self.bg)
+		for thing in self.things:
+			thing.drawBg(self.bg)
 
 		self.bg = self.bg.convert()
 
@@ -134,10 +138,13 @@ class Game:
 
 			# do updates and check collisions
 			for thing in self.things:
-				thing.checkCollision(self.player1)
-				thing.checkCollision(self.player2)
-				thing.checkCollision(self.blackhole)
+				for thing2 in self.things:
+					if isinstance(thing2, c.Bullet):
+						break
+					thing.checkCollision(thing2)
 				thing.update(self.things)
+				#thing.checkCollision(self.player2)
+				#thing.checkCollision(self.blackhole)
 			
 			# check win condition
 			if self.player1.lives < 0 and self.player2.lives < 0:
@@ -173,3 +180,39 @@ class Game:
 		# draw buffer onto the screen (alpha blending)
 		screen.blit(self.buff, (0,0))
 
+class RandomGame(Game):
+	def initThings(self):
+		WIDTH, HEIGHT = self.state.size
+		self.things = []
+		holes = random.randrange(1, 4)
+		for i in range(holes + 1):
+			(x,y) = self.getLocation()
+			rad = random.randrange(0, 30)
+			pow = random.uniform(2.5, 7.5)
+			self.things.append(c.GravityWell(x, y, rad, pow))
+
+		(x,y) = self.getLocation()
+		rot = random.randrange(0, 360)
+		self.player1 = c.Player(Game.color1, x, y, rot, 'left')
+		self.things.append(self.player1)
+
+		(x,y) = self.getLocation()
+		rot = random.randrange(0, 360)
+		self.player2 = c.Player(Game.color2, x, y, rot, 'right')
+		self.things.append(self.player2)
+
+	def getLocation(self):
+		WIDTH, HEIGHT = self.state.size
+		close = True
+		while close:
+			close = False
+			x = random.randrange(0, WIDTH)
+			y = random.randrange(0, HEIGHT)
+			for thing in self.things:
+				dx = thing.x - x
+				dy = thing.y - y
+				hyp = math.hypot(dx, dy)
+				if hyp < 40:
+					close = True
+		return (x,y)
+		

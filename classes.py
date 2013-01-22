@@ -18,6 +18,7 @@ def getDeg(dx, dy):
 		deg = 360 - deg
 	return deg
 
+
 class Movable:
 	'Super class for movable game objects'
 
@@ -66,11 +67,11 @@ class Movable:
 		dy = cur_dy + new_dy
 		self.vel = math.hypot(dx, dy)
 		self.dir = getDeg(dx, dy)
-		
-		if self.vel > 5:
-			self.vel = 5
-		if self.vel < 0:
-			self.vel = 0
+
+		# do we need this?
+		#if self.vel < 0:
+		#	self.vel = 0
+
 
 class Player(Movable):
 	'Player class that extends Movable'
@@ -200,6 +201,14 @@ class Player(Movable):
 		self.rate['engine'] = Player.rate['engine']
 		self.rate['jump']   = Player.rate['jump']
 
+	def applyForce(self, val, direction):
+		Movable.applyForce(self, val, direction)
+
+		# players have a max speed
+		if self.vel > 5:
+			self.vel = 5
+
+
 	def update(self, others=None):
 		Movable.update(self)
 
@@ -245,7 +254,7 @@ class Player(Movable):
 			y = self.y + math.sin(rad) * 7
 			
 			b = Bullet(x, y, self.vel, self.dir, self.color)
-			b.applyForce(3, self.rot)
+			b.applyForce(3.5, self.rot)
 			b.update()
 
 			self.shooting = 3
@@ -518,6 +527,7 @@ class GravityWell(Movable):
 
 	def display(self, surface):
 		pass # already on Background 
+
 
 class Bullet(Movable):
 	# not super happy with these explosion colors, but they'll have to do for now
